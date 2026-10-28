@@ -12,7 +12,9 @@ ToolRegistry::~ToolRegistry() = default;   // unique_ptrs in your buckets free t
 
 std::size_t ToolRegistry::hash(std::string_view toolname) noexcept {
     std::size_t h = 14695981039346656037ull;
-    for (unsigned char c : toolname) { h ^= c; h *= 1099511628211ull; }
+    for (unsigned char c : toolname) { 
+        h ^= c;
+        h *= 1099511628211ull; }
     return h;
    // TODO: FNV-1a (spec Appendix A) or another real string hash
 }
