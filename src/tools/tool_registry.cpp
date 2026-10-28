@@ -11,11 +11,9 @@ ToolRegistry::ToolRegistry() = default; // TODO: create your initial buckets (64
 ToolRegistry::~ToolRegistry() = default;   // unique_ptrs in your buckets free the tools
 
 std::size_t ToolRegistry::hash(std::string_view toolname) noexcept {
-        std::size_t key = 0;
-        for(char c: toolname){
-            key += c;
-        }
-        return key % 64;
+    std::size_t h = 14695981039346656037ull;
+    for (unsigned char c : toolname) { h ^= c; h *= 1099511628211ull; }
+    return h;
    // TODO: FNV-1a (spec Appendix A) or another real string hash
 }
 
@@ -24,6 +22,9 @@ std::size_t ToolRegistry::hash(std::string_view toolname) noexcept {
     // already registered; the existing tool is left untouched.
     // Amortized O(1).
 bool ToolRegistry::add(std::unique_ptr<Tool> tool) {
+    if((load_factor() == 1.0) || (max_probe_length() == 64)){  //makes sure never to let the load factor get to high or the max length get too long
+        rehash(2*bucket_count());
+    }
     if (tool == nullptr) {
         return false;
     }
@@ -32,11 +33,11 @@ bool ToolRegistry::add(std::unique_ptr<Tool> tool) {
     if (find(name_of_tool) != nullptr) {
         return false;
     }
-    std::size_t key = hash(name_of_tool);
+    std::size_t key = hash(name_of_tool) % bucket_count_value;
     //std::unique_ptr<Tool> owned_tool = move(tool);
-    if (Tools[key].head != nullptr){
-        bucket_count_value++;
-    }
+    // if (Tools[key].head != nullptr){
+    //     bucket_count_value++;
+    // }
     Tools[key].add(name_of_tool, std::move(tool)); 
     num_of_tools++; 
 
@@ -49,7 +50,7 @@ bool ToolRegistry::add(std::unique_ptr<Tool> tool) {
     // The returned pointer stays valid for the registry's lifetime, even
     // across later add() calls that trigger a resize.
 Tool* ToolRegistry::find(std::string_view findtoolname) const {
-    std::size_t key = hash(findtoolname);
+    std::size_t key = hash(findtoolname) % bucket_count_value;
     Node* nameptr = Tools[key].head;
     while(nameptr != nullptr){
         if(nameptr->toolname == findtoolname){
@@ -91,6 +92,25 @@ std::size_t ToolRegistry::max_probe_length() const {
         }
     }
     return max_probe_length;
+}
+
+void ToolRegistry::rehash(std::size_t new_count) {
+    std::vector<LinkedList> fresh(new_count);
+    for (auto& bucket : Tools) {
+        Node* n = bucket.head;
+        while (n != nullptr) {
+            Node* next = n->next;                       // save before relinking
+            std::size_t i = hash(n->toolname) % new_count;
+            n->next = fresh[i].head;
+            fresh[i].head = n;
+            fresh[i].probe_length++;
+            n = next;
+        }
+        bucket.head = nullptr;   
+        bucket.probe_length = 0;    
+    }
+    Tools = std::move(fresh);
+    bucket_count_value = new_count;
 }
 
     // void NameLinkedList::add(std::string name, ToolNode* AssociatedToolNode){
@@ -140,3 +160,34 @@ std::size_t ToolRegistry::max_probe_length() const {
             current = nextNode;
         }
     }
+
+    ////////////////////////////////////////////////
+    //used for testing
+
+    bool ToolRegistry::worse_add(std::unique_ptr<Tool> tool) {
+    if((load_factor() == 1.0) || (max_probe_length() == 64)){  //makes sure never to let the load factor get to high or the max length get too long
+        rehash(2*bucket_count());
+    }
+    if (tool == nullptr) {
+        return false;
+    }
+
+    std::string name_of_tool = tool->name();
+    if (find(name_of_tool) != nullptr) {
+        return false;
+    }
+    std::size_t key = worse_hash(name_of_tool) % bucket_count_value;
+    //std::unique_ptr<Tool> owned_tool = move(tool);
+    // if (Tools[key].head != nullptr){
+    //     bucket_count_value++;
+    // }
+    Tools[key].add(name_of_tool, std::move(tool)); 
+    num_of_tools++; 
+
+    return true;
+
+}
+
+std::size_t ToolRegistry::worse_hash(std::string_view name){
+    return name[0] + name.size();
+}

@@ -41,9 +41,9 @@ bool Workspace::resolve(std::string_view user_path, fs::path* out,
 
 
     if (n == ".") {  //checks for "." path
-        *out = root_;
+        *out = root();
         return true;
     }
-    *out = root_ / n;
+    *out = root() / n;
     return true;
 }

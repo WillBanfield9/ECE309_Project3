@@ -125,6 +125,12 @@ public:
     // string hash that looks at every character: s[0] + s.size() is not.
     static std::size_t hash(std::string_view toolname) noexcept;
 
+    //used for tetsing
+
+     bool worse_add(std::unique_ptr<Tool> tool);
+
+     std::size_t worse_hash(std::string_view name);
+
 private:
     // ===== YOUR REPRESENTATION GOES HERE =====
     // Your buckets, your element count, and any private helpers you want
@@ -134,6 +140,8 @@ private:
 
     std::size_t num_of_tools = 0;
     std::size_t bucket_count_value = 64;
+
+    void rehash(std::size_t new_count);    
 
 };
 

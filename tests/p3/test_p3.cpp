@@ -69,6 +69,73 @@ TEST(reg_duplicate_keeps_original) {
     CHECK(r.size() == 1);
 }
 
+TEST(reg_for_each) {
+    ToolRegistry reg;
+    const int N = 10000;
+    for (int i = 0; i < N; ++i) {
+        REQUIRE(reg.add(std::make_unique<NamedTool>("tool_" + std::to_string(i))));
+    }
+int count = 0;
+reg.for_each([&](const Tool& tool) {               // a lambda: runs once per tool
+    std::string hello = tool.name();
+    ++count;                                       // [&] lets it change `count`
+});
+CHECK(count == N);
+}
+
+TEST(reg_load_factor_always_less_than_1){
+
+
+    ToolRegistry reg;
+    const int N = 10000;
+    for (int i = 0; i < N; ++i) {
+        REQUIRE(reg.add(std::make_unique<NamedTool>("tool_" + std::to_string(i))));
+        CHECK(reg.load_factor() <= 1.0);  // checks that the load factor never exceeds 1
+    }
+
+}
+
+TEST(reg_every_name_can_be_found){
+    ToolRegistry reg;
+    const int N = 10000;
+    for (int i = 0; i < N; ++i) {
+        REQUIRE(reg.add(std::make_unique<NamedTool>("tool_" + std::to_string(i))));
+    }
+    for (int j = 0; j < N; j++){
+        CHECK(reg.find(("tool_" + std::to_string(j))) != nullptr);  //checks that each name for the tool is found
+    }
+
+}
+
+TEST(reg_max_probe_length_less_than_64){
+    ToolRegistry reg;
+    const int N = 10000;
+    for (int i = 0; i < N; ++i) {
+        REQUIRE(reg.add(std::make_unique<NamedTool>("tool_" + std::to_string(i))));
+        CHECK(reg.load_factor() <= 64);  // checks that the load factor never exceeds 1
+    }
+}
+
+TEST(reg_alternative_hash){
+    ToolRegistry reg;
+    ToolRegistry worse_reg;
+    const int N = 1000;
+
+    for (int i = 0; i < N; ++i) {
+        REQUIRE(reg.add(std::make_unique<NamedTool>("tool_" + std::to_string(i))));
+        REQUIRE(worse_reg.worse_add(std::make_unique<NamedTool>("tool_" + std::to_string(i))));
+        
+    }
+    printf("Longest chain for worse hash: %ld\n", worse_reg.max_probe_length());
+    printf("Longest chain for my hash: %ld\n", reg.max_probe_length());
+
+    CHECK(worse_reg.max_probe_length() >= reg.max_probe_length());
+
+
+    }
+
+
+
 TEST(ws_rejects_parent_escape) {
     TempDir d;
     Workspace ws(d.path());
@@ -87,6 +154,28 @@ TEST(ws_rejects_null){
     std::string reason;
     CHECK(!ws.resolve(std::string_view("notes\0/x", 8), &out, &reason));  //string_view specifies that the string is 8 chars long so it includes the null
     CHECK(!reason.empty());
+}
+
+TEST(ws_accept_roots_correct){
+    TempDir d;
+    Workspace ws(d.path());
+    fs::path out;
+    std::string reason;
+    CHECK(ws.resolve("notes/todo.txt", &out, &reason)); 
+    CHECK(out == ws.root() / "notes" / "todo.txt");
+    CHECK(ws.resolve("./notes//todo.txt", &out, &reason));  
+    CHECK(out == ws.root() / "notes" / "todo.txt");
+    CHECK(ws.resolve(".", &out, &reason));  
+    CHECK(out == ws.root());
+    CHECK(ws.resolve("a/../b", &out, &reason));  
+    CHECK(out == ws.root() / "b");
+    CHECK(ws.resolve("a/..", &out, &reason));  
+    CHECK(out == ws.root());
+    CHECK(ws.resolve("new/dir/file.txt", &out, &reason));  
+    CHECK(out == ws.root() /"new" / "dir"/ "file.txt");
+    CHECK(ws.resolve("my..notes.txt", &out, &reason));  
+    CHECK(out == ws.root() / "my..notes.txt");
+
 
 }
 
@@ -130,6 +219,37 @@ TEST(calc_parentheses){
     CHECK(v == 39);
     REQUIRE(eval("2*((-1 + 3)/(2-1))", &v, &err));
     CHECK(v == 4);
+}
+
+TEST(calc_left_to_right){
+double v = 0;
+    std::string err;    
+    REQUIRE(eval("1 - 2 - 3", &v, &err));
+    CHECK(v == -4);  // if the answer is 2, the thing is not evaluating left to right
+    REQUIRE(eval("1 - 2 - 3 - 4 - 5", &v, &err));
+    CHECK(v == -13); 
+}
+
+TEST(calc_table_4_6_tests){
+    double v = 0;
+    std::string err; 
+    REQUIRE(eval("2 + 3 * 4", &v, &err));
+    CHECK(v == 14);
+    REQUIRE(eval("10 - 4 - 3", &v, &err));
+    CHECK(v == 3);
+    REQUIRE(eval("100 / 10 / 5", &v, &err));
+    CHECK(v == 2);
+    REQUIRE(eval("(2+3) * 4", &v, &err));
+    CHECK(v == 20);
+    REQUIRE(eval("2 * (3 + 4) - 5", &v, &err));
+    CHECK(v == 9);
+    REQUIRE(eval("-3 * -3", &v, &err));
+    CHECK(v == 9);
+    REQUIRE(eval("7 / 2", &v, &err));
+    CHECK(v == 3.5);
+    REQUIRE(!eval("1/(2 - 2)", &v, &err));
+    CHECK(err == "division by zero");
+    
 }
 
 // ------------------------------------------------------------- your tests
